@@ -68,16 +68,16 @@ public class RadarImageService
         while (imageIndex > -1)
         {
             var fileNameStart = imageIndex + 6;                                 // href=" is 6 characters
-            var endOfFileIndex = imageListHtml[fileNameStart..].IndexOf('"');
-            if (endOfFileIndex < 0)
+            var fileNameEnd = imageListHtml[fileNameStart..].IndexOf('"');
+            if (fileNameEnd < 0)
                 break;
-            endOfFileIndex += fileNameStart;
+            fileNameEnd += fileNameStart;
 
-            var fileUrl = imageListHtml[fileNameStart..endOfFileIndex];
+            var fileUrl = imageListHtml[fileNameStart..fileNameEnd];
             var radarImage = new RadarImage(fileUrl, radarType);
             images.Add(radarImage);
 
-            imageListHtml = imageListHtml[endOfFileIndex..];
+            imageListHtml = imageListHtml[fileNameEnd..];
             imageIndex = imageListHtml.IndexOf(imageToken);
         }
 
@@ -139,16 +139,15 @@ public class RadarImageService
             return null;
 
         var fileToExtract = new FileInfo(image.ZippedFilePath);
-
-        using FileStream originalFileStream = fileToExtract.OpenRead();
+        using FileStream zippedStream = fileToExtract.OpenRead();
 
         string currentFileName = fileToExtract.FullName;
         string extractedFileName = currentFileName.Remove(currentFileName.Length - fileToExtract.Extension.Length);
 
-        using FileStream extractedFileStream = File.Create(extractedFileName);
-        using GZipStream decompressionStream = new(originalFileStream, CompressionMode.Decompress);
+        using FileStream extractedStream = File.Create(extractedFileName);
+        using GZipStream gzipStream = new(zippedStream, CompressionMode.Decompress);
 
-        decompressionStream.CopyTo(extractedFileStream);
+        gzipStream.CopyTo(extractedStream);
         image.FilePath = extractedFileName;
 
         Console.WriteLine($"Extracted: {fileToExtract.Name}");
