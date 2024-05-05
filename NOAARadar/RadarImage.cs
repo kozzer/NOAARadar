@@ -26,5 +26,5 @@ public class RadarImage
         FileDate = FileDate.AddHours(-5);
     }
 
-    public override string ToString() => $"{RadarType}   |   {FileDate:MM/dd/yyyy hh:mm:ss tt}   |   {OriginalFileName}";
+    public override string ToString() => $"{RadarType}  |  {FileDate:MM/dd/yyyy hh:mm:ss tt}  |  {OriginalFileName}";
 }

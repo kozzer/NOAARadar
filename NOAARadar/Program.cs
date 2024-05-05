@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace NOAARadar;
 
@@ -16,13 +17,14 @@ internal class Program
     {
         var services = new ServiceCollection();
 
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddJsonFile("appsettings.json").Build());
         services.AddSingleton<HttpClient>();
         services.AddSingleton<RadarImageService>();
 
-        ServiceProvider = services.BuildServiceProvider();        
+        ServiceProvider = services.BuildServiceProvider();
     }
 
-    static async Task Main(string[] args)
+    static async Task Main()
     {
         var radarService = ServiceProvider.GetRequiredService<RadarImageService>();
 

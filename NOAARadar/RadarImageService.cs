@@ -1,4 +1,5 @@
-﻿using System.IO.Compression;
+﻿using Microsoft.Extensions.Configuration;
+using System.IO.Compression;
 
 namespace NOAARadar;
 
@@ -16,20 +17,24 @@ public class RadarImageService
     private readonly string _klotNexRadImageURL;
     private readonly string _klotImageListURL;
 
-    private readonly string _localRadarFolder = @"C:\Users\David\Desktop\Radar";
+    private readonly string _localRadarFolder;
 
-    public RadarImageService(HttpClient httpClient)
+    public RadarImageService(HttpClient httpClient, IConfiguration config)
     {
-        _httpClient         = httpClient;
+        _httpClient = httpClient;
 
-        // Got from https://opengeo.ncep.noaa.gov/geoserver/www/index.html
-        _radarRootURL       = "https://mrms.ncep.noaa.gov/data/RIDGEII";
+        // https://mrms.ncep.noaa.gov/data/RIDGEII -- got from https://opengeo.ncep.noaa.gov/geoserver/www/index.html
+        _radarRootURL = config["RadarURLs:RadarDataRootURL"] ?? throw new Exception("Unable to get 'RadarURLs:RadarDataRootURL' from Configuration"); 
 
-        _conusRadarImageURL = $"{_radarRootURL}/L2/CONUS/CREF_QCD";
+        var conusSubPath    = config["RadarURLs:CONUS_Path"] ?? throw new Exception("Unable to get 'RadarURLs:CONUS_Path' from Configuration");
+        _conusRadarImageURL = $"{_radarRootURL}/{conusSubPath}";
         _conusImageListURL  = $"{_conusRadarImageURL}/";
 
-        _klotNexRadImageURL = $"{_radarRootURL}/L3/KLOT/BDHC";
+        var klotSubPath     = config["RadarURLs:KLOT_Path"] ?? throw new Exception("Unable to get 'RadarURLs:KLOT_Path' from Configuration");
+        _klotNexRadImageURL = $"{_radarRootURL}/{klotSubPath}";
         _klotImageListURL   = $"{_klotNexRadImageURL}/";
+
+        _localRadarFolder = config["LocalBaseFilePath"] ?? throw new Exception("Unable to get 'LocalBaseFilePath' from Configuration");
     }
 
     public async Task<List<RadarImage>> GetCONUSRadarImages()
@@ -110,7 +115,7 @@ public class RadarImageService
         return localFileList;
     }
 
-    private List<RadarImage> extractZippedImages(List<RadarImage> images)
+    private static List<RadarImage> extractZippedImages(List<RadarImage> images)
     {
         var extractedFiles = new List<RadarImage>();
 
@@ -128,7 +133,7 @@ public class RadarImageService
         return extractedFiles;  
     }
 
-    private RadarImage? extractImage(RadarImage image)
+    private static RadarImage? extractImage(RadarImage image)
     {
         if (string.IsNullOrEmpty(image.ZippedFilePath))
             return null;
