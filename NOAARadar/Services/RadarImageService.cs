@@ -7,7 +7,7 @@ namespace NOAARadar;
 
 public class RadarImageService
 {
-    public int AnimationDurationInHours { get; } = 1;
+    public int AnimationDurationInHours { get; } = 3;
     private readonly HttpClient _httpClient;
 
     private readonly string _radarRootURL;
@@ -40,20 +40,20 @@ public class RadarImageService
         _localRadarFolder = config["LocalBaseFilePath"] ?? throw new Exception("Unable to get 'LocalBaseFilePath' from Configuration");
     }
 
-    public async Task GetCONUSRadarImages(List<RadarImage> conusImages)
+    public async Task<List<RadarImage>> GetCONUSRadarImages()
     {
         var fileList  = await getFileImageList(RadarType.CONUS);
         var newImages = await downloadAndExtractNewImageFiles(fileList, RadarType.CONUS);
 
-        newImages.ForEach(conusImages.Add);
+        return newImages;
     }
 
-    public async Task GetKLOTRadarImages(List<RadarImage> klotImages)
+    public async Task<List<RadarImage>> GetKLOTRadarImages()
     {
         var fileList  = await getFileImageList(RadarType.KLOT);
         var newImages = await downloadAndExtractNewImageFiles(fileList, RadarType.KLOT);
 
-        newImages.ForEach(klotImages.Add);
+        return newImages;
     }
 
     private async Task<List<RadarImage>> getFileImageList(RadarType radarType)

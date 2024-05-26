@@ -26,6 +26,8 @@ public class AnimationService
                 GifDisposeMethod = GifDisposeMethod.Previous
             };
 
+            magickImage.Resize(1920, 0);
+
             animation.Add(magickImage);
         }
 
