@@ -1,10 +1,13 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using ImageMagick;
+using Microsoft.Extensions.Configuration;
 using System.IO.Compression;
+using Windows.Graphics.Printing.PrintSupport;
 
 namespace NOAARadar;
 
 public class RadarImageService
 {
+    public int AnimationDurationInHours { get; } = 1;
     private readonly HttpClient _httpClient;
 
     private readonly string _radarRootURL;
@@ -37,22 +40,20 @@ public class RadarImageService
         _localRadarFolder = config["LocalBaseFilePath"] ?? throw new Exception("Unable to get 'LocalBaseFilePath' from Configuration");
     }
 
-    public async Task<List<RadarImage>> GetCONUSRadarImages()
+    public async Task GetCONUSRadarImages(List<RadarImage> conusImages)
     {
-        var fileList        = await getFileImageList(RadarType.CONUS);
-        var downloadedFiles = await downloadImageFiles(fileList, RadarType.CONUS);
-        var extractedFiles  = extractZippedImages(downloadedFiles);
+        var fileList  = await getFileImageList(RadarType.CONUS);
+        var newImages = await downloadAndExtractNewImageFiles(fileList, RadarType.CONUS);
 
-        return extractedFiles;
+        newImages.ForEach(conusImages.Add);
     }
 
-    public async Task<List<RadarImage>> GetKLOTRadarImages()
+    public async Task GetKLOTRadarImages(List<RadarImage> klotImages)
     {
-        var fileList        = await getFileImageList(RadarType.KLOT);
-        var downloadedFiles = await downloadImageFiles(fileList, RadarType.KLOT);
-        var extractedFiles  = extractZippedImages(downloadedFiles);
+        var fileList  = await getFileImageList(RadarType.KLOT);
+        var newImages = await downloadAndExtractNewImageFiles(fileList, RadarType.KLOT);
 
-        return extractedFiles;
+        newImages.ForEach(klotImages.Add);
     }
 
     private async Task<List<RadarImage>> getFileImageList(RadarType radarType)
@@ -81,78 +82,102 @@ public class RadarImageService
             imageIndex = imageListHtml.IndexOf(imageToken);
         }
 
-        // Get images covering last hour
-        images = images.Where(i => i.FileDate > DateTime.Now.AddHours(-1))
-                       .OrderByDescending(i => i.FileDate)
+        // Get images covering animation duration
+        images = images.Where(i => i.FileDate > DateTime.Now.AddHours(AnimationDurationInHours * -1))
+                       .OrderBy(i => i.FileDate)
                        .ToList();
 
         return images;
     }
 
-    private async Task<List<RadarImage>> downloadImageFiles(List<RadarImage> imageFileList, RadarType radarType)
+    private async Task<List<RadarImage>> downloadAndExtractNewImageFiles(List<RadarImage> imageFileList, RadarType radarType)
     {
         var localFileList = new List<RadarImage>();
 
         var imageURL = radarType == RadarType.CONUS ? _conusRadarImageURL : _klotNexRadImageURL;
 
         var i = 0;
-        foreach (var imageFileItem in imageFileList)
+        foreach (RadarImage imageFileItem in imageFileList)
         {
-            Console.WriteLine($"Downloading file {++i} / {imageFileList.Count}: {imageFileItem}");
+            Console.WriteLine($"Checking file {++i,3} / {imageFileList.Count,-3}: {imageFileItem}");
 
-            var fileURL = $"{imageURL}/{imageFileItem.OriginalFileName}";
-            var localPath = $"{_localRadarFolder}/{radarType}/{imageFileItem.OriginalFileName}";
+            string fileURL = $"{imageURL}/{imageFileItem.OriginalFileName}";
+            string localPath = $"{_localRadarFolder}/{radarType}/{imageFileItem.OriginalFileName}";
 
-            using var downloadStream = await _httpClient.GetStreamAsync(fileURL);
-            using var fileStream = new FileStream(localPath, FileMode.Create);
+            // See if this image has already been processed, if so add it to the list and go to next
+            string localGifFilePath = StaticMethods.GetGifFilenameFor(localPath);
+            if (File.Exists(localGifFilePath))
+            {
+                Console.WriteLine($"\tFile already exists: {localGifFilePath}");
 
-            downloadStream.CopyTo(fileStream);
+                imageFileItem.FilePath = localGifFilePath;
+                localFileList.Add(imageFileItem);
+                continue;
+            }
 
-            imageFileItem.ZippedFilePath = localPath;
+            Console.WriteLine($"\tDownloading: {localGifFilePath}");
+            await downloadFileFromServer(fileURL, localPath);
+
+            extractTifImage(imageFileItem, localPath);
+
+            convertToGif(imageFileItem);
+
+            // Add to list
             localFileList.Add(imageFileItem);
         }
 
+        localFileList = localFileList.OrderBy(img => img.FileDate).ToList();
         return localFileList;
     }
 
-    private static List<RadarImage> extractZippedImages(List<RadarImage> images)
+    private async Task downloadFileFromServer(string serverFileUrl, string localFilePath)
     {
-        var extractedFiles = new List<RadarImage>();
+        // New image, so download and extract
+        using var downloadStream = await _httpClient.GetStreamAsync(serverFileUrl);
+        using var fileStream = new FileStream(localFilePath, FileMode.Create);
 
-        foreach (var image in images)
-        {
-            var extracted = extractImage(image);
-            if (extracted is null)
-                continue;
+        // Download to file
+        downloadStream.CopyTo(fileStream);
 
-            extractedFiles.Add(extracted);
-            File.Delete(image.ZippedFilePath!);
-            image.ZippedFilePath = null; 
-        }
-
-        return extractedFiles;  
+        fileStream.Close();
+        fileStream.Dispose();
     }
 
-    private static RadarImage? extractImage(RadarImage image)
+    private static void extractTifImage(RadarImage image, string zippedFilePath)
     {
-        if (string.IsNullOrEmpty(image.ZippedFilePath))
-            return null;
+        if (string.IsNullOrEmpty(zippedFilePath))
+            throw new ArgumentNullException(nameof(zippedFilePath));
 
-        var fileToExtract = new FileInfo(image.ZippedFilePath);
+        Console.WriteLine($"\tExtracting: {zippedFilePath}");
+
+        var fileToExtract = new FileInfo(zippedFilePath);
         using FileStream zippedStream = fileToExtract.OpenRead();
+        {
+            string currentFileName = fileToExtract.FullName;
+            string extractedFileName = currentFileName.Remove(currentFileName.Length - fileToExtract.Extension.Length);
 
-        string currentFileName = fileToExtract.FullName;
-        string extractedFileName = currentFileName.Remove(currentFileName.Length - fileToExtract.Extension.Length);
+            using FileStream extractedStream = File.Create(extractedFileName);
+            using GZipStream gzipStream = new(zippedStream, CompressionMode.Decompress);
 
-        using FileStream extractedStream = File.Create(extractedFileName);
-        using GZipStream gzipStream = new(zippedStream, CompressionMode.Decompress);
+            gzipStream.CopyTo(extractedStream);
+            image.FilePath = extractedFileName;
+        }
 
-        gzipStream.CopyTo(extractedStream);
-        image.FilePath = extractedFileName;
+        File.Delete(zippedFilePath);
+    }
 
-        Console.WriteLine($"Extracted: {fileToExtract.Name}");
+    private static void convertToGif(RadarImage image)
+    {
+        Console.WriteLine($"\tConverting to gif: {image.FilePath}");
 
-        return image;
+        string gifPath = image.FilePath!.Replace(".tif", ".gif");
+
+        using var magick = new MagickImage(image.FilePath);
+        magick.Write(gifPath, MagickFormat.Gif);
+
+        File.Delete(image.FilePath);
+
+        image.FilePath = gifPath;
     }
 
 }

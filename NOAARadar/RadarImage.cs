@@ -6,7 +6,6 @@ public class RadarImage
     public DateTime FileDate { get; }
     public RadarType RadarType { get; } 
 
-    public string? ZippedFilePath { get; set; } = null;
     public string? FilePath { get; set; } = null;
 
     public RadarImage(string fileName, RadarType radarType)

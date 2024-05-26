@@ -20,18 +20,34 @@ internal class Program
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddJsonFile("appsettings.json").Build());
         services.AddSingleton<HttpClient>();
         services.AddSingleton<RadarImageService>();
+        services.AddSingleton<AnimationService>();
 
         ServiceProvider = services.BuildServiceProvider();
     }
 
-    static async Task Main()
+    static void Main()
     {
         var radarService = ServiceProvider.GetRequiredService<RadarImageService>();
 
-        var conusFiles = await radarService.GetCONUSRadarImages();
-        var klotFiles  = await radarService.GetKLOTRadarImages();
+        List<RadarImage> conusFiles = new();
+        List<RadarImage> klotFiles = new();
+
+        //await radarService.GetCONUSRadarImages(conusFiles);
+       // await radarService.GetKLOTRadarImages(klotFiles);
+
+        Task.WaitAll([
+            Task.Run(() => radarService.GetCONUSRadarImages(conusFiles)),
+            Task.Run(() => radarService.GetKLOTRadarImages(klotFiles))
+        ]);
 
         Console.WriteLine($"\n\n\n\nFound {conusFiles.Count} CONUS radar image files");
         Console.WriteLine($"Found {klotFiles.Count} KLOT radar image files");
+
+        var animationService = ServiceProvider.GetRequiredService<AnimationService>();
+
+        Task.WaitAll(
+            Task.Run(() => animationService.GenerateAnimation(conusFiles)),
+            Task.Run(() => animationService.GenerateAnimation(klotFiles))
+        );
     }
 }
