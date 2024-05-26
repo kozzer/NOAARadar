@@ -27,22 +27,22 @@ public class RadarImageService
         _httpClient = httpClient;
 
         // https://mrms.ncep.noaa.gov/data/RIDGEII -- got from https://opengeo.ncep.noaa.gov/geoserver/www/index.html
-        _radarRootURL = config["RadarURLs:RadarDataRootURL"] ?? throw new Exception("Unable to get 'RadarURLs:RadarDataRootURL' from Configuration"); 
+        _radarRootURL = config["RadarURLs:RadarDataRootURL"] ?? throw new Exception("Unable to get 'RadarURLs:RadarDataRootURL' from Configuration");
 
-        var conusSubPath    = config["RadarURLs:CONUS_Path"] ?? throw new Exception("Unable to get 'RadarURLs:CONUS_Path' from Configuration");
+        var conusSubPath = config["RadarURLs:CONUS_Path"] ?? throw new Exception("Unable to get 'RadarURLs:CONUS_Path' from Configuration");
         _conusRadarImageURL = $"{_radarRootURL}/{conusSubPath}";
-        _conusImageListURL  = $"{_conusRadarImageURL}/";
+        _conusImageListURL = $"{_conusRadarImageURL}/";
 
-        var klotSubPath     = config["RadarURLs:KLOT_Path"] ?? throw new Exception("Unable to get 'RadarURLs:KLOT_Path' from Configuration");
+        var klotSubPath = config["RadarURLs:KLOT_Path"] ?? throw new Exception("Unable to get 'RadarURLs:KLOT_Path' from Configuration");
         _klotNexRadImageURL = $"{_radarRootURL}/{klotSubPath}";
-        _klotImageListURL   = $"{_klotNexRadImageURL}/";
+        _klotImageListURL = $"{_klotNexRadImageURL}/";
 
         _localRadarFolder = config["LocalBaseFilePath"] ?? throw new Exception("Unable to get 'LocalBaseFilePath' from Configuration");
     }
 
     public async Task<List<RadarImage>> GetCONUSRadarImages()
     {
-        var fileList  = await getFileImageList(RadarType.CONUS);
+        var fileList = await getFileImageList(RadarType.CONUS);
         var newImages = await downloadAndExtractNewImageFiles(fileList, RadarType.CONUS);
 
         return newImages;
@@ -50,7 +50,7 @@ public class RadarImageService
 
     public async Task<List<RadarImage>> GetKLOTRadarImages()
     {
-        var fileList  = await getFileImageList(RadarType.KLOT);
+        var fileList = await getFileImageList(RadarType.KLOT);
         var newImages = await downloadAndExtractNewImageFiles(fileList, RadarType.KLOT);
 
         return newImages;
@@ -60,8 +60,8 @@ public class RadarImageService
     {
         var images = new List<RadarImage>();
 
-        var imageToken   = radarType == RadarType.CONUS ? _conusRadarFileToken : _klotRadarFileToken;
-        var imageListURL = radarType == RadarType.CONUS ? _conusImageListURL   : _klotImageListURL;
+        var imageToken = radarType == RadarType.CONUS ? _conusRadarFileToken : _klotRadarFileToken;
+        var imageListURL = radarType == RadarType.CONUS ? _conusImageListURL : _klotImageListURL;
 
         var imageListHtml = await _httpClient.GetStringAsync(imageListURL);
 
@@ -173,6 +173,12 @@ public class RadarImageService
         string gifPath = image.FilePath!.Replace(".tif", ".gif");
 
         using var magick = new MagickImage(image.FilePath);
+
+        // If CONUS, then make the image 20% taller, as the Equirectangular projection used makes things look squished
+        var resizeGeom = new MagickGeometry(7000, 4200) { IgnoreAspectRatio = true };
+        if (image.RadarType == RadarType.CONUS)
+            magick.Resize(resizeGeom);
+
         magick.Write(gifPath, MagickFormat.Gif);
 
         File.Delete(image.FilePath);
