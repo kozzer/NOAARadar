@@ -1,5 +1,6 @@
 ﻿using ImageMagick;
 using Microsoft.Extensions.Configuration;
+using Windows.Media.Devices.Core;
 
 namespace NOAARadar;
 
@@ -19,14 +20,17 @@ public class AnimationService
         {
             i++;
 
-            if (images[0].RadarType == RadarType.CONUS && i % 4 != 0)
+            if (image.RadarType == RadarType.CONUS && i % 4 != 0)
                 continue;
 
-            Console.WriteLine($"\tPreparing frame {i,3} of {images.Count,-3}: {image.FilePath}");
+            Console.WriteLine($"\tPreparing {image.RadarType,-5} frame {i,3} of {images.Count,-3}: {image.FilePath}");
 
-            MagickImage magickImage = prepareFrame(image, i == 1, i >= images.Count - 1);
+            MagickImage magickImage = prepareFrame(image);
             animation.Add(magickImage);
         }
+
+        animation[0].AnimationIterations = 0;
+        animation[^1].AnimationDelay = 200;
 
         var radarType = images[0].RadarType;
         var publishedFileName = $"{radarType}.gif";
@@ -45,20 +49,39 @@ public class AnimationService
         return exportFilePath;
     }
 
-    private static MagickImage prepareFrame(RadarImage image, bool isFirstImage, bool isLastImage)
+    private static MagickImage prepareFrame(RadarImage image)
     {
         var magickImage = new MagickImage(image.FilePath!)
         {
+            AnimationDelay = 1,
             BackgroundColor = MagickColors.Transparent,
             GifDisposeMethod = GifDisposeMethod.Previous,
         };
 
-        if (isFirstImage)
-            magickImage.AnimationIterations = 0;
-
-        magickImage.AnimationDelay = isLastImage ? 200 : 1;
-
         magickImage.Resize(1920, 0);
+        magickImage = addTimestampToFrame(magickImage, image.FileDate);
         return magickImage;
+    }
+
+    private static MagickImage addTimestampToFrame(MagickImage image, DateTime frameTimeStamp)
+    {
+        var settings = new MagickReadSettings
+        {
+            Font = "Cascadia Mono",
+            FontFamily = "Cascadia Mono",
+            FillColor = MagickColors.LightGray,
+            StrokeColor = MagickColors.LightGray,
+            TextGravity = Gravity.Center,
+            BackgroundColor = new MagickColor("#66666699"),
+            BorderColor = MagickColors.Black,
+            Height = 40, // height of text box
+            Width = 175, // width of text box
+            FontPointsize = 20
+        };
+
+        using (var caption = new MagickImage($"caption:{frameTimeStamp:ddd h:mm tt}", settings))
+        image.Composite(caption, Gravity.Southeast, CompositeOperator.Over);
+
+        return image;
     }
 }

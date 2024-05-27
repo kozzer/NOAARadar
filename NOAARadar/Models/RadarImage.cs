@@ -8,10 +8,10 @@ public class RadarImage
 
     public string? FilePath { get; set; } = null;
 
-    public RadarImage(string fileName, RadarType radarType)
+    public RadarImage(string fileName)
     {
         OriginalFileName = fileName;            // ex. CONUS_L2_CREF_QCD_20240504_230241.tif.gz
-        RadarType = radarType;
+        RadarType = OriginalFileName.Contains("CONUS") ? RadarType.CONUS : RadarType.KLOT;
 
         fileName = fileName.Replace(".tif.gz", "");
         var timeOfDay = fileName[(fileName.LastIndexOf('_') + 1)..];

@@ -42,6 +42,7 @@ public class RadarImageService
 
     public async Task<List<RadarImage>> GetCONUSRadarImages()
     {
+        deleteOldFiles(RadarType.CONUS);
         var fileList = await getFileImageList(RadarType.CONUS);
         var newImages = await downloadAndExtractNewImageFiles(fileList, RadarType.CONUS);
 
@@ -50,10 +51,22 @@ public class RadarImageService
 
     public async Task<List<RadarImage>> GetKLOTRadarImages()
     {
+        deleteOldFiles(RadarType.KLOT);
         var fileList = await getFileImageList(RadarType.KLOT);
         var newImages = await downloadAndExtractNewImageFiles(fileList, RadarType.KLOT);
 
         return newImages;
+    }
+
+    private void deleteOldFiles(RadarType radarType)
+    {
+        var files = Directory.GetFiles(Path.Combine(_localRadarFolder, radarType.ToString()));
+        foreach (var file in files)
+        {
+            var img = new RadarImage(file);
+            if (img.FileDate < DateTime.Now.AddHours(AnimationDurationInHours * -1))
+                File.Delete(file);
+        }
     }
 
     private async Task<List<RadarImage>> getFileImageList(RadarType radarType)
@@ -75,7 +88,7 @@ public class RadarImageService
             fileNameEnd += fileNameStart;
 
             var fileUrl = imageListHtml[fileNameStart..fileNameEnd];
-            var radarImage = new RadarImage(fileUrl, radarType);
+            var radarImage = new RadarImage(fileUrl);
             images.Add(radarImage);
 
             imageListHtml = imageListHtml[fileNameEnd..];
