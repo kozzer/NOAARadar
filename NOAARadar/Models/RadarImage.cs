@@ -13,6 +13,9 @@ public class RadarImage
         OriginalFileName = fileName;            // ex. CONUS_L2_CREF_QCD_20240504_230241.tif.gz
         RadarType = OriginalFileName.Contains("CONUS") ? RadarType.CONUS : RadarType.KLOT;
 
+        if (OriginalFileName.EndsWith(".gif") && File.Exists(OriginalFileName))
+            FilePath = OriginalFileName;
+
         fileName = fileName.Replace(".tif.gz", "");
         var timeOfDay = fileName[(fileName.LastIndexOf('_') + 1)..];
 

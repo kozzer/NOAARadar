@@ -1,13 +1,12 @@
 ﻿using ImageMagick;
 using Microsoft.Extensions.Configuration;
 using System.IO.Compression;
-using Windows.Graphics.Printing.PrintSupport;
 
 namespace NOAARadar;
 
 public class RadarImageService
 {
-    public int AnimationDurationInHours { get; } = 3;
+    public int AnimationDurationInHours { get; } = 6;
     private readonly HttpClient _httpClient;
 
     private readonly string _radarRootURL;
@@ -43,19 +42,29 @@ public class RadarImageService
     public async Task<List<RadarImage>> GetCONUSRadarImages()
     {
         deleteOldFiles(RadarType.CONUS);
-        var fileList = await getFileImageList(RadarType.CONUS);
-        var newImages = await downloadAndExtractNewImageFiles(fileList, RadarType.CONUS);
+        var existingImages = getExistingImages(RadarType.CONUS);
+        var fileList       = await getFileImageList(RadarType.CONUS);
+        var newImages      = await downloadAndExtractNewImageFiles(fileList, RadarType.CONUS);
 
-        return newImages;
+        var allImages = existingImages;
+        allImages.AddRange(newImages);
+        allImages = allImages.DistinctBy(img => img.FileDate).OrderBy(img => img.FileDate).ToList();
+
+        return allImages;
     }
 
     public async Task<List<RadarImage>> GetKLOTRadarImages()
     {
         deleteOldFiles(RadarType.KLOT);
-        var fileList = await getFileImageList(RadarType.KLOT);
-        var newImages = await downloadAndExtractNewImageFiles(fileList, RadarType.KLOT);
+        var existingImages = getExistingImages(RadarType.KLOT);
+        var fileList       = await getFileImageList(RadarType.KLOT);
+        var newImages      = await downloadAndExtractNewImageFiles(fileList, RadarType.KLOT);
 
-        return newImages;
+        var allImages = existingImages;
+        allImages.AddRange(newImages);
+        allImages = allImages.DistinctBy(img => img.FileDate).OrderBy(img => img.FileDate).ToList();
+
+        return allImages;
     }
 
     private void deleteOldFiles(RadarType radarType)
@@ -67,6 +76,17 @@ public class RadarImageService
             if (img.FileDate < DateTime.Now.AddHours(AnimationDurationInHours * -1))
                 File.Delete(file);
         }
+    }
+
+    private List<RadarImage> getExistingImages(RadarType radarType)
+    {
+        var files = Directory.GetFiles(Path.Combine(_localRadarFolder, radarType.ToString()));
+        var imageList = new List<RadarImage>();
+        foreach(var file in files)
+        {
+            imageList.Add(new RadarImage(file));
+        }
+        return imageList;
     }
 
     private async Task<List<RadarImage>> getFileImageList(RadarType radarType)
@@ -95,8 +115,8 @@ public class RadarImageService
             imageIndex = imageListHtml.IndexOf(imageToken);
         }
 
-        // Get images covering animation duration
-        images = images.Where(i => i.FileDate > DateTime.Now.AddHours(AnimationDurationInHours * -1))
+        // Only get images that are half as long as duration (so subsequent runs don't immediate delete frames we can use!)
+        images = images.Where(i => i.FileDate > DateTime.Now.AddHours((AnimationDurationInHours / 2) * -1))
                        .OrderBy(i => i.FileDate)
                        .ToList();
 

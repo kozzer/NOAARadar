@@ -1,6 +1,5 @@
 ﻿using ImageMagick;
 using Microsoft.Extensions.Configuration;
-using Windows.Media.Devices.Core;
 
 namespace NOAARadar;
 
