@@ -75,10 +75,14 @@ public class AnimationService
             BorderColor = MagickColors.Black,
             Height = 40, // height of text box
             Width = 175, // width of text box
-            FontPointsize = 20
+            FontPointsize = 20,
         };
 
-        using (var caption = new MagickImage($"caption:{frameTimeStamp:ddd h:mm tt}", settings))
+        var hours = frameTimeStamp.Hour;
+        if (hours > 12)
+            hours -= 12;
+
+        using (var caption = new MagickImage($"caption:{frameTimeStamp:ddd} {hours,2}:{frameTimeStamp:mm tt}", settings))
         image.Composite(caption, Gravity.Southeast, CompositeOperator.Over);
 
         return image;
